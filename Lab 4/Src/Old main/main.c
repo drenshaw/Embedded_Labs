@@ -2,7 +2,6 @@
   ******************************************************************************
   * File Name          : main.c
   * Description        : Main program body
-	* Devin Renshaw			 : Analog Lab
   ******************************************************************************
   *
   * COPYRIGHT(c) 2017 STMicroelectronics
@@ -35,102 +34,159 @@
 #include "main.h"
 #include "stm32f0xx_hal.h"
 
+/* USER CODE BEGIN Includes */
+void toggle_red()
+{
+	GPIOC->ODR &= ~((1<<7)|(1<<8)|(1<<9));
+	GPIOC->ODR ^= (1<<6);
+}
+
+void toggle_orange()
+{
+	GPIOC->ODR &= ~((1<<6)|(1<<7)|(1<<9));
+	GPIOC->ODR ^= (1<<8);
+}
+
+void toggle_green()
+{
+	GPIOC->ODR &= ~((1<<6)|(1<<7)|(1<<8));
+	GPIOC->ODR ^= (1<<9);
+}
+
+void toggle_blue()
+{
+	GPIOC->ODR &= ~((1<<6)|(1<<8)|(1<<9));
+	GPIOC->ODR ^= (1<<7);
+}
+
+void tx_string(char str[])
+{
+	//while(!(USART3->ISR & USART_ISR_TXE))	{}	/* tx reg bit not set; exits when tx bit set */
+	for(int i = 0; str[i] != '\0'; ++i)
+	{
+		while(!(USART3->ISR & USART_ISR_TXE))	{}	/* tx reg bit not set; exits when tx bit set */
+		USART3->TDR = str[i];
+	}
+}
+
+void compare_char(char ch)
+{
+	if (ch == 'r')
+		toggle_red();
+	else if (ch == 'o')
+		toggle_orange();
+	else if (ch == 'g')
+		toggle_green();
+	else if (ch == 'b')
+		toggle_blue();
+	else
+	{
+		char str[] = "ERROR";
+		tx_string(str);
+	}
+	return;
+}
+
+void tx_char(char ch)
+{
+	while(!(USART3->ISR & USART_ISR_TXE))	{}	/* tx reg bit not set; exits when tx bit set */
+	USART3->TDR = ch;
+}
+
+void rx_char()
+{
+	while (!(USART3->RDR & USART_ISR_RXNE))
+	{
+	
+	}
+	char ch = USART3->RDR;
+	compare_char(ch);
+	USART3->RQR |= 1<<3;	// Manually reset RXNE
+}
+/* USER CODE END Includes */
+
 /* Private variables ---------------------------------------------------------*/
-//static int OFFSET = 0;
-//static int count = 0;
-const uint8_t sine_table[32] = {127,151,175,197,216,232,244,251,254,251,244,
-					232,216,197,175,151,127,102,78,56,37,21,9,2,0,2,9,21,37,56,78,102};
+
+/* USER CODE BEGIN PV */
+/* Private variables ---------------------------------------------------------*/
+
+/* USER CODE END PV */
+
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void Error_Handler(void);
 
+/* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
-void pin_off(int OFFSET)
-{
-	GPIOC->ODR &= ~(1<<OFFSET);
-}
 
-void pin_on(int OFFSET)
-{
-	GPIOC->ODR |= (1<<OFFSET);
-}
-	
+/* USER CODE END PFP */
+
+/* USER CODE BEGIN 0 */
+
+/* USER CODE END 0 */
+
 int main(void)
 {
-  /* MCU Configuration----------------------------------------------------------*/
+	  /* MCU Configuration----------------------------------------------------------*/
+
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
+
   /* Configure the system clock */
   SystemClock_Config();
-
-  /* Initialize all peripheral clocks */
+	
+	
+  /* USER CODE BEGIN 1 */
 	RCC->AHBENR |= RCC_AHBENR_GPIOCEN;		// GPIOC peripheral clock enable
-	RCC->AHBENR |= RCC_AHBENR_GPIOBEN;		// GPIOB peripheral clock enable
-	RCC->AHBENR |= RCC_AHBENR_GPIOAEN;		// GPIOA peripheral clock enable
-	
-	/* Enable LEDs */
-	GPIOC->MODER |= (1<<12)|(1<<14)|(1<<16)|(1<<18);		// Output mode
-	GPIOC->OSPEEDR &= ~((1<<6)|(1<<7)|(1<<8)|(1<<9));		// Low speed
-	GPIOC->OTYPER &= ~((1<<6)|(1<<7)|(1<<8)|(1<<9));		// Push-pull
-	GPIOC->PUPDR |= 0x000FF000;													// No pull-up/pull-down
-	/* Setup ADC pin (PC0 -> ADC_IN10) */
-	GPIOC->MODER |= 0x3;		// Analog mode
-	GPIOC->PUPDR |= 0x3;		// No pullup/pulldown
-	/* Setup DAC pin (PA4 -> DAC_OUT1) */
-	GPIOA->MODER |= (1<<8)|(1<<9);		// Analog mode
-	GPIOA->PUPDR |= (1<<8)|(1<<9);		// No pullup/pulldown
-	/* ADC1 and DAC clock enable */
-	//RCC->APB2ENR  |= RCC_APB2ENR_ADCEN;
-	RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;		// ADC peripheral clock enable
-	RCC->APB1ENR |= RCC_APB1ENR_DACEN;		// DAC peripheral clock enable
-	
-	/* ADC configuration */
-	ADC1->CFGR1 |= (1<<4);		// Set bit 4 -> CFGR1[4:3] = 10 for 8 bits resolution
-	ADC1->CFGR1 &= ~(1<<3);		// Clear bit 3; set data resolution to 8 bits
-	ADC1->CFGR1 |= ADC_CFGR1_CONT/*(1<<13)*/;		// Continuous conversion mode
-	ADC1->CFGR1 &= ~((1<<10)|(1<<11));	// Disable hardware triggers (SW only)
-	ADC1->CHSELR = ADC_CHSELR_CHSEL10;		// Select channel 10 (pin PC0)
-	
-	/* ADC calibration */
-	ADC1->CR |= ADC_CR_ADCAL;	// Sets calibration bit
-	while (ADC1->CR & ADC_CR_ADCAL) {}	// While calibration in progress, loop
-	//OFFSET = ADC1->DR & 0x7F;	// Saves offset error
-	ADC1->CR |= ADC_CR_ADEN;	// Enable ADC command (ADEN = 1)
-	
-	/* DAC configuration */		
-	DAC->CR |= DAC_CR_TSEL1;	// Software trigger
-	DAC->CR |= DAC_CR_EN1;		// DAC enable channel 1
-	
+	RCC->APB1ENR |= RCC_APB1ENR_USART3EN;	// Enable USART3 clock
+	GPIOC->MODER |= (1<<9)|(1<<11);			// Set pins PC4 and PC5 to alternate mode
+	GPIOC->AFR[0] |= 0x00110000;	// Select AF1 on PC4 and PC5 in AFRL
+  /* USER CODE END 1 */
+
+
+  /* Initialize all configured peripherals */
+
+  /* USER CODE BEGIN 2 */
+	int clock = HAL_RCC_GetHCLKFreq();		// Get clock frequency
+	int baud = 115200;										// Desired baud rate
+	int usartdiv1 = clock/baud;						// Calculate baud rate register value: ~69
+	USART3->BRR = usartdiv1;							// Store value into baud rate register
+	USART3->CR1 |= USART_CR1_TE;					/* Enable tx on USART3 */
+	USART3->CR1 |= USART_CR1_RXNEIE | USART_CR1_RE;	/* Enable rx on USART3 */
+	USART3->CR1 |= USART_CR1_UE;					/* Enable USART3 */
+
+	/* Enable LEDs (PC6-PC9)
+			RED		->	PC6
+			ORANGE->	PC8
+			GREEN ->	PC9
+			BLUE	->	PC7	*/
+	GPIOC->MODER |= (1<<12)|(1<<14)|(1<<16)|(1<<18);	// Set pins PC6 to PC9 to output mode
+	GPIOC->OTYPER &= ~((1<<6)|(1<<7)|(1<<8)|(1<<9));	// Clears bits 6 & 7 to enable push-pull
+	GPIOC->OSPEEDR &= ~((1<<6)|(1<<7)|(1<<8)|(1<<9));	// Clears pins PC6 and PC7 to low speed
+	GPIOC->PUPDR &= ~(0x000FF000);				// Clears bits of PC6 and PC7 to no pull-up, pull-down
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
   while (1)
   {
-		while (!(ADC1->ISR & ADC_ISR_ADRDY))
-		{
-		}
-		ADC1->CR |= ADC_CR_ADSTART;
-		int data = ADC1->DR;
-		if (data > 0x33)
-			pin_on(6);
-		else
-			pin_off(6);
-		if (data > 0x66)
-			pin_on(8);
-		else
-			pin_off(8);
-		if (data > 0x99)
-			pin_on(7);
-		else
-			pin_off(7);
-		if (data > 0xCC)
-			pin_on(9);
-		else
-			pin_off(9);
-		HAL_Delay(100);
-		/*for (int i = 0; i < 32; i++)
-		{
-			DAC->DHR8R1 = sine_table[i];
-			HAL_Delay(1);	// 1ms delay
-		}*/
+  /* USER CODE END WHILE */
+		tx_char('a');
+		//char str[] = "string";
+		/*for(int i = 0; str[i] != '\0'; ++i)
+			tx_char(str[i]);
+		*/
+		/*char str[] = "strings are for wimps!";
+		tx_string(str);
+		*/
+		//rx_char();
+		//USART3->RQR |= 1<<3;	// Manually reset RXNE
+		HAL_Delay(200);
+  /* USER CODE BEGIN 3 */
+
   }
+  /* USER CODE END 3 */
+
 }
 
 /** System Clock Configuration
